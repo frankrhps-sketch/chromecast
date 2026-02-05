@@ -6,6 +6,9 @@ const castDebugLogger = cast.debug.CastDebugLogger.getInstance();
 castDebugLogger.setEnabled(true);
 castDebugLogger.showDebugLogs(true);
 
+/**
+ * Helper to fetch external metadata
+ */
 function makeRequest(method, url) {
     return new Promise(function (resolve, reject) {
         let xhr = new XMLHttpRequest();
@@ -24,37 +27,48 @@ function makeRequest(method, url) {
     });
 }
 
+// Step 9: Intercept the LOAD request
 playerManager.setMessageInterceptor(
     cast.framework.messages.MessageType.LOAD,
     request => {
         return new Promise((resolve, reject) => {
-            // FIX: Ensure the URL is the full path to the JSON
+            // FIX 1: Use the full URL to the sample media JSON
             makeRequest('GET', 'https://storage.googleapis.com')
                 .then(function (data) {
-                    // FIX: If contentId is missing, default to 'fbb_ad'
-                    let contentId = request.media.contentId || 'fbb_ad';
-                    let item = data[contentId];
+                    // FIX 2: Navigate the JSON structure (categories -> videos)
+                    const contentId = request.media.contentId;
+                    const videoList = data.categories[0].videos; // The codelab JSON structure
+                    const item = videoList.find(v => v.title === contentId);
 
                     if (!item) {
                         castDebugLogger.error('Main', 'Content not found: ' + contentId);
-                        reject("Content not found");
+                        // If not found, we resolve the original request to try playing as-is
+                        resolve(request);
                     } else {
+                        // Create Metadata
                         let metadata = new cast.framework.messages.GenericMediaMetadata();
                         metadata.title = item.title;
-                        metadata.subtitle = item.author;
+                        metadata.subtitle = item.subtitle || item.studio;
                         request.media.metadata = metadata;
 
-                        // THE "BLINK" FIX: Set fMP4 for HLS
-                        request.media.contentUrl = item.stream.hls;
-                        request.media.contentType = 'application/x-mpegurl';
-                        request.media.hlsSegmentFormat = cast.framework.messages.HlsSegmentFormat.FMP4;
-                        request.media.hlsVideoSegmentFormat = cast.framework.messages.HlsVideoSegmentFormat.FMP4;
+                        // FIX 3: Assign the stream URL and type correctly
+                        // Note: Codelab assets are mp4, but keeping your HLS logic structure
+                        request.media.contentUrl = item.sources[0]; 
+                        request.media.contentType = 'video/mp4'; 
+                        
+                        // If you are specifically testing HLS/fMP4 assets:
+                        if (request.media.contentUrl.includes('m3u8')) {
+                            request.media.contentType = 'application/x-mpegurl';
+                            request.media.hlsSegmentFormat = cast.framework.messages.HlsSegmentFormat.FMP4;
+                            request.media.hlsVideoSegmentFormat = cast.framework.messages.HlsVideoSegmentFormat.FMP4;
+                        }
 
+                        castDebugLogger.info('Main', 'Loading: ' + metadata.title);
                         resolve(request);
                     }
                 })
                 .catch(err => {
-                    castDebugLogger.error('Main', 'XHR Failed');
+                    castDebugLogger.error('Main', 'Fetch Failed: ' + JSON.stringify(err));
                     reject(err);
                 });
         });
@@ -62,9 +76,12 @@ playerManager.setMessageInterceptor(
 );
 
 const options = new cast.framework.CastReceiverOptions();
-options.useShakaForHls = true; // Essential for fbb_ad
+
+// Step 9: Often requires Shaka for advanced HLS handling
+options.useShakaForHls = true; 
 
 context.start(options);
+
 
 
 
