@@ -1,8 +1,7 @@
-html
 <!DOCTYPE html>
 <html>
 <head>
-  <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+  <script src="https://www.gstatic.com"></script>
 </head>
 <body>
   <cast-media-player></cast-media-player>
@@ -10,11 +9,14 @@ html
     const context = cast.framework.CastReceiverContext.getInstance();
     const playerManager = context.getPlayerManager();
 
-    // Step 9: Intercept the LOAD request to resolve the stream URL via external API
+    /**
+     * Step 9: Intercept the LOAD request to resolve the stream URL
+     * This allows the receiver to fetch media info from an external API
+     */
     playerManager.setMessageInterceptor(
       cast.framework.messages.MessageType.LOAD,
       loadRequestData => {
-        // The sender provides a title in contentId; we fetch the URL for it
+        // The contentId sent by the sender is used to find the video in the JSON
         const contentId = loadRequestData.media.contentId;
         
         return fetch('https://storage.googleapis.com')
@@ -22,17 +24,19 @@ html
           .then(data => {
             const item = data.categories.videos.find(v => v.title === contentId);
             if (item) {
+              // Update the request with the actual video URL from the API
               loadRequestData.media.contentUrl = item.sources;
               loadRequestData.media.contentType = 'video/mp4';
             }
             return loadRequestData;
           })
           .catch(() => {
-            return null; // Reject the load if the API call fails
+            return null; // Cancel playback if the fetch fails
           });
       }
     );
 
+    // context.start() must be called AFTER registering the interceptor
     context.start();
   </script>
 </body>
