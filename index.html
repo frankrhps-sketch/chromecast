@@ -2,8 +2,8 @@
 <html>
 <head>
   <style>
-    body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; background: blue !important; }
-    cast-media-player { width: 100%; height: 100%; }
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: blue; }
+    cast-media-player { width: 100%; height: 100%; display: block; }
   </style>
   <script src="https://www.gstatic.com"></script>
 </head>
@@ -13,13 +13,33 @@
     const context = cast.framework.CastReceiverContext.getInstance();
     const playerManager = context.getPlayerManager();
 
-    // No API calls, no logic—just force a video to play
     playerManager.setMessageInterceptor(
       cast.framework.messages.MessageType.LOAD,
-      request => {
-        request.media.contentUrl = 'https://commondatastorage.googleapis.com';
-        request.media.contentType = 'video/mp4';
-        return request;
+      loadRequestData => {
+        // Step 9: Fetch from the codelab API
+        return fetch('https://storage.googleapis.com')
+          .then(response => response.json())
+          .then(data => {
+            const contentId = loadRequestData.media.contentId;
+            const videoList = data.categories[0].videos; // Note the [0] for the first category
+            const item = videoList.find(v => v.title === contentId);
+
+            if (item) {
+              // The JSON 'sources' is an array, CAF needs a string
+              loadRequestData.media.contentUrl = item.sources[0]; 
+              loadRequestData.media.contentType = 'video/mp4';
+            } else {
+              // Fallback if the title doesn't match
+              loadRequestData.media.contentUrl = 'https://commondatastorage.googleapis.com';
+              loadRequestData.media.contentType = 'video/mp4';
+            }
+            return loadRequestData;
+          })
+          .catch(() => {
+            // Error fallback
+            loadRequestData.media.contentUrl = 'https://commondatastorage.googleapis.com';
+            return loadRequestData;
+          });
       }
     );
 
@@ -27,5 +47,6 @@
   </script>
 </body>
 </html>
+
 
 
