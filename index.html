@@ -1,43 +1,51 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <style>
+    /* Ensure the player fills the entire TV screen */
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: black; }
+    cast-media-player { width: 100%; height: 100%; }
+  </style>
   <script src="https://www.gstatic.com"></script>
 </head>
 <body>
+  <!-- This tag MUST be present for the screen to show anything but black -->
   <cast-media-player></cast-media-player>
+
   <script>
     const context = cast.framework.CastReceiverContext.getInstance();
     const playerManager = context.getPlayerManager();
 
-    /**
-     * Step 9: Intercept the LOAD request to resolve the stream URL
-     * This allows the receiver to fetch media info from an external API
-     */
+    // Step 9: Intercept the LOAD request
     playerManager.setMessageInterceptor(
       cast.framework.messages.MessageType.LOAD,
       loadRequestData => {
-        // The contentId sent by the sender is used to find the video in the JSON
-        const contentId = loadRequestData.media.contentId;
-        
         return fetch('https://storage.googleapis.com')
           .then(response => response.json())
           .then(data => {
-            const item = data.categories.videos.find(v => v.title === contentId);
+            const contentId = loadRequestData.media.contentId;
+            const videoList = data.categories[0].videos; // Step 9 JSON structure
+            const item = videoList.find(v => v.title === contentId);
+
             if (item) {
-              // Update the request with the actual video URL from the API
-              loadRequestData.media.contentUrl = item.sources;
+              loadRequestData.media.contentUrl = item.sources[0]; // Take first URL string
+              loadRequestData.media.contentType = 'video/mp4';
+            } else {
+              // Forced fallback so it doesn't stay blank
+              loadRequestData.media.contentUrl = 'https://commondatastorage.googleapis.com';
               loadRequestData.media.contentType = 'video/mp4';
             }
             return loadRequestData;
           })
           .catch(() => {
-            return null; // Cancel playback if the fetch fails
+            return loadRequestData; // Return original if fetch fails
           });
       }
     );
 
-    // context.start() must be called AFTER registering the interceptor
+    // Initialize the receiver
     context.start();
   </script>
 </body>
 </html>
+
