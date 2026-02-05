@@ -2,37 +2,24 @@
 <html>
 <head>
   <style>
-    /* FIX 1: Ensure the player is visible and fills the TV screen */
-    body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: black; }
-    cast-media-player { width: 100%; height: 100%; display: block; }
+    body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; background: blue !important; }
+    cast-media-player { width: 100%; height: 100%; }
   </style>
   <script src="https://www.gstatic.com"></script>
 </head>
 <body>
   <cast-media-player></cast-media-player>
-  
   <script>
     const context = cast.framework.CastReceiverContext.getInstance();
     const playerManager = context.getPlayerManager();
 
+    // No API calls, no logic—just force a video to play
     playerManager.setMessageInterceptor(
       cast.framework.messages.MessageType.LOAD,
-      loadRequestData => {
-        return fetch('https://storage.googleapis.com')
-          .then(response => response.json())
-          .then(data => {
-            const contentId = loadRequestData.media.contentId;
-            const videoList = data.categories[0].videos; // FIX 2: Corrected JSON path
-            const item = videoList.find(v => v.title === contentId);
-
-            if (item) {
-              // FIX 3: item.sources is an array; CAF requires a single string
-              loadRequestData.media.contentUrl = item.sources[0];
-              loadRequestData.media.contentType = 'video/mp4';
-            }
-            return loadRequestData;
-          })
-          .catch(() => loadRequestData); // Fallback to original request
+      request => {
+        request.media.contentUrl = 'https://commondatastorage.googleapis.com';
+        request.media.contentType = 'video/mp4';
+        return request;
       }
     );
 
@@ -40,4 +27,5 @@
   </script>
 </body>
 </html>
+
 
